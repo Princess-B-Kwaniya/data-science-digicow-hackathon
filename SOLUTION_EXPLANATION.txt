@@ -1,0 +1,139 @@
+DIGICOW Hackathon - Solution Explanation
+=========================================
+
+COMPETITION OVERVIEW
+--------------------
+This is a Zindi data science competition for predicting dairy technology adoption 
+by farmers in Kenya. The DigiCow platform trains farmers and we predict whether 
+they adopt the technology within 7, 90, and 120 days of their first training.
+
+The evaluation metric is a composite score across 3 targets, each scored as:
+  Score = 0.75 * LogLoss + 0.25 * (1 - AUC)
+Final score = average of the 3 target scores (LOWER is better).
+
+Each submission has 6 prediction columns:
+  - Target_07_AUC, Target_07_LogLoss
+  - Target_90_AUC, Target_90_LogLoss
+  - Target_120_AUC, Target_120_LogLoss
+
+
+DATA
+----
+- Train.csv: ~14,000 farmer training records with 3 binary targets
+- Test.csv:  ~5,000 farmer records to predict
+- Key features: county, ward, subcounty, trainer, farmer_id, group_name, 
+  has_topic_trained_on, belong_to_cooperative, training_date
+
+The data is tabular with mostly categorical features. There are geographic 
+hierarchies (county > subcounty > ward) and organizational groups.
+
+
+APPROACH THAT ACHIEVED HIGHEST SCORE
+--------------------------------------
+Best Leaderboard Score: 0.723 (submission: sub_V7_D1_DUAL_fine_v3ll.csv)
+
+The solution is built in two stages:
+
+### Stage 1: GROUPS_V3_FAST.py -> sub_V3_A_optimal.csv (LB: 0.722)
+
+This uses Bayesian hierarchical group-based predictions (NO machine learning model).
+
+Core idea: For each target, predictions are made using group-level adoption rates 
+with Bayesian smoothing toward the global mean.
+
+  Bayesian prediction = (group_count * group_mean + s * global_mean) / (group_count + s)
+
+Where s is the smoothing parameter (higher s = more conservative, closer to global mean).
+
+The hierarchy works by cascading through group keys from most specific to most general:
+  1. trainer_ward_topic (most specific: which trainer, which ward, which topic)
+  2. trainer_ward
+  3. ward_topic
+  4. county_topic
+  5. trainer
+  6. county
+  7. ward (most general)
+
+For each test row:
+  - Try the most specific group first
+  - If the group exists in training data, use its Bayesian-smoothed prediction
+  - If not, fall through to the next less-specific group
+  - Final fallback is the global adoption rate
+
+The optimal smoothing parameter and hierarchy ordering were selected via 
+5-fold stratified cross-validation, independently for each target.
+
+Key insight: This approach works because the data has strong geographic and 
+trainer-based patterns. Farmers in the same ward trained by the same trainer 
+on the same topic have very similar adoption patterns.
+
+
+### Stage 2: V7_SAFE.py -> sub_V7_D1_DUAL_fine_v3ll.csv (LB: 0.723)
+
+This builds on V3 with a DUAL column strategy:
+
+Since Zindi evaluates AUC and LogLoss from SEPARATE columns, we can optimize 
+each independently:
+
+  - LogLoss columns: Keep the V3_A_optimal predictions (well-calibrated, proven 0.722)
+  - AUC columns: Use a FINER-grained hierarchy that produces more unique values
+
+The fine-grained hierarchy for AUC includes ward_group and group_name:
+  ward_group -> group_name -> ward_topic -> county_topic -> ward -> county -> trainer
+
+More unique prediction values help AUC because AUC measures ranking ability.
+V3 only had ~39 unique values; the fine hierarchy creates hundreds, giving 
+the AUC metric more granularity to distinguish between farmers.
+
+The LogLoss columns stay identical to V3 because LogLoss penalizes 
+miscalibrated probabilities heavily - any aggressive changes hurt it 
+(lesson learned from earlier farmer_id experiments that dropped to 0.702).
+
+
+LEADERBOARD BREAKDOWN (0.723 submission)
+-----------------------------------------
+  Target 7  LogLoss: 0.162  |  AUC: 0.868
+  Target 90 LogLoss: 0.297  |  AUC: 0.869
+  Target 120 LogLoss: 0.383 |  AUC: 0.881
+
+The biggest area for improvement is Target 120 LogLoss (0.383), which carries 
+75% weight in its target score.
+
+
+KEY LESSONS LEARNED
+--------------------
+1. Group-based Bayesian predictions beat ML models (LightGBM, CatBoost) on this 
+   data because the categorical features have strong hierarchical structure.
+
+2. Bayesian smoothing is critical - raw group means overfit badly, especially 
+   for small groups. The smoothing parameter s controls the bias-variance tradeoff.
+
+3. The DUAL column strategy (different predictions for AUC vs LogLoss) provides 
+   a small but real improvement because the two metrics reward different properties.
+
+4. Aggressive personalization (e.g., farmer_id with low smoothing) destroys 
+   LogLoss even when it helps AUC - LogLoss has 3x the weight.
+
+5. Cross-validation on this dataset is unreliable for small improvements 
+   (<0.005) due to distribution shift between train and test.
+
+
+FILES IN THIS REPOSITORY
+--------------------------
+Solution code:
+  - GROUPS_V3_FAST.py    : Stage 1 - generates the V3 base predictions (LB 0.722)
+  - V7_SAFE.py           : Stage 2 - DUAL column improvement (LB 0.723, best score)
+
+Best submissions:
+  - sub_V3_A_optimal.csv         : V3 base submission (LB 0.722)
+  - sub_V7_D1_DUAL_fine_v3ll.csv : Best submission (LB 0.723)
+
+Data:
+  - Train.csv                    : Training data
+  - Test.csv                     : Test data  
+  - dataset_data_dictionary.csv  : Column descriptions
+  - SampleSubmission.csv         : Submission format template
+
+Notebooks:
+  - StarterNotebook.ipynb        : Competition starter notebook
+  - CompetitiveSolution.ipynb    : Competition-provided competitive solution
