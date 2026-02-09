@@ -8,10 +8,12 @@
 # Solution code (produced highest score)
 !GROUPS_V3_FAST.py
 !V7_SAFE.py
+!V9_TOPICFIX.py
 
 # Best submissions
 !sub_V3_A_optimal.csv
 !sub_V7_D1_DUAL_fine_v3ll.csv
+!sub_V9_A_v7_topicfix.csv
 
 # Data files
 !Train.csv

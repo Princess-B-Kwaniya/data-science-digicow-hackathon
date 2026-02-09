@@ -30,9 +30,9 @@ hierarchies (county > subcounty > ward) and organizational groups.
 
 APPROACH THAT ACHIEVED HIGHEST SCORE
 --------------------------------------
-Best Leaderboard Score: 0.723 (submission: sub_V7_D1_DUAL_fine_v3ll.csv)
+Best Leaderboard Score: 0.7247 (submission: sub_V9_A_v7_topicfix.csv)
 
-The solution is built in two stages:
+The solution is built in three stages:
 
 ### Stage 1: GROUPS_V3_FAST.py -> sub_V3_A_optimal.csv (LB: 0.722)
 
@@ -90,14 +90,36 @@ miscalibrated probabilities heavily - any aggressive changes hurt it
 (lesson learned from earlier farmer_id experiments that dropped to 0.702).
 
 
-LEADERBOARD BREAKDOWN (0.723 submission)
------------------------------------------
-  Target 7  LogLoss: 0.162  |  AUC: 0.868
-  Target 90 LogLoss: 0.297  |  AUC: 0.869
-  Target 120 LogLoss: 0.383 |  AUC: 0.881
+### Stage 3: V9_TOPICFIX.py -> sub_V9_A_v7_topicfix.csv (LB: 0.7247)
 
-The biggest area for improvement is Target 120 LogLoss (0.383), which carries 
-75% weight in its target score.
+This is a targeted post-processing fix on top of V7:
+
+Key discovery: The feature has_topic_trained_on is a binary (0/1) flag.
+In training data, ALL 838 rows with has_topic_trained_on=0 have ZERO adoption
+across all 3 targets. This means farmers who were not trained on a specific topic
+never adopt the technology.
+
+In the test set, 99 rows have has_topic_trained_on=0. V7 was predicting these
+at 3-10% probability (from geographic group averages), but the true probability
+is essentially 0%.
+
+The fix: Force all predictions for has_topic_trained_on=0 test rows to 0.001
+(minimum allowed value) in BOTH AUC and LogLoss columns.
+
+Why this helps:
+  - LogLoss: Predicting 0.001 instead of 0.03-0.10 for actual 0 labels gives
+    much lower log loss. The penalty goes from -log(1-0.05)≈0.051 to -log(0.999)≈0.001.
+  - AUC: Pushing guaranteed non-adopters to the minimum helps the ranking — they
+    should be ranked below all other farmers.
+
+This changed only 99 of 6000 test rows. No model retraining needed.
+
+
+LEADERBOARD PROGRESSION
+-----------------------
+  V3_A_optimal (Stage 1):       0.722
+  V7_D1 DUAL (Stage 2):         0.723  
+  V9_A topic fix (Stage 3):     0.7247  (current best)
 
 
 KEY LESSONS LEARNED
@@ -117,20 +139,28 @@ KEY LESSONS LEARNED
 5. Cross-validation on this dataset is unreliable for small improvements 
    (<0.005) due to distribution shift between train and test.
 
+6. Fine-grained hierarchies (ward_group, group_name) overfit in CV but hurt 
+   test LogLoss badly — V8 changed the LL column and dropped to 0.695.
+
+7. Domain knowledge beats brute-force optimization: the has_topic_trained_on=0 
+   insight (guaranteed non-adoption) provided a safe, reliable improvement.
+
 
 FILES IN THIS REPOSITORY
 --------------------------
 Solution code:
   - GROUPS_V3_FAST.py    : Stage 1 - generates the V3 base predictions (LB 0.722)
-  - V7_SAFE.py           : Stage 2 - DUAL column improvement (LB 0.723, best score)
+  - V7_SAFE.py           : Stage 2 - DUAL column improvement (LB 0.723)
+  - V9_TOPICFIX.py       : Stage 3 - topic=0 post-processing fix (LB 0.7247, best)
 
 Best submissions:
   - sub_V3_A_optimal.csv         : V3 base submission (LB 0.722)
-  - sub_V7_D1_DUAL_fine_v3ll.csv : Best submission (LB 0.723)
+  - sub_V7_D1_DUAL_fine_v3ll.csv : V7 DUAL submission (LB 0.723)
+  - sub_V9_A_v7_topicfix.csv     : Best submission (LB 0.7247)
 
 Data:
-  - Train.csv                    : Training data
-  - Test.csv                     : Test data  
+  - Train.csv                    : Training data (16,000 rows)
+  - Test.csv                     : Test data (6,000 rows)
   - dataset_data_dictionary.csv  : Column descriptions
   - SampleSubmission.csv         : Submission format template
 
