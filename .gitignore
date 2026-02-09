@@ -4,16 +4,20 @@
 # Allow these specific files
 !.gitignore
 !SOLUTION_EXPLANATION.txt
+!SOLUTION_EVOLUTION.txt
+!README.md
 
 # Solution code (produced highest score)
 !GROUPS_V3_FAST.py
 !V7_SAFE.py
 !V9_TOPICFIX.py
+!DUAL_FINAL.py
 
 # Best submissions
 !sub_V3_A_optimal.csv
 !sub_V7_D1_DUAL_fine_v3ll.csv
 !sub_V9_A_v7_topicfix.csv
+!sub_DUAL_f1_g3_w3.csv
 
 # Data files
 !Train.csv
