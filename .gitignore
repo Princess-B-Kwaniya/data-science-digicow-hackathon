@@ -7,13 +7,38 @@
 !SOLUTION_EVOLUTION.txt
 !README.md
 
-# Solution code (produced highest score)
+# ===== PHASE 2 (New Data) =====
+
+# Best solution code
+!CompetitiveSolution.py
+!ENHANCED_V2.py
+!REFINED_v3.py
+!cross_analysis.py
+!check_new_data.py
+
+# Best submissions (Phase 2)
+!sub_COMP_A_lgbm_standard.csv
+!sub_COMP_B_lgbm_dual.csv
+!sub_COMP_C_blend_prior.csv
+!sub_COMP_D_dual_prior_blend.csv
+!sub_REFv3_A_ens_blend_dual.csv
+!sub_REFv3_B_ens_dual.csv
+!sub_REFv3_C_platt_blend_dual.csv
+!sub_REFv3_D_blend60D_40new.csv
+!sub_REFv3_E_blend50D_50new.csv
+
+# New data files
+!Prior.csv
+
+# ===== PHASE 1 (Old Data — invalidated) =====
+
+# Solution code (produced highest score on old data)
 !GROUPS_V3_FAST.py
 !V7_SAFE.py
 !V9_TOPICFIX.py
 !DUAL_FINAL.py
 
-# Best submissions
+# Best submissions (old data)
 !sub_V3_A_optimal.csv
 !sub_V7_D1_DUAL_fine_v3ll.csv
 !sub_V9_A_v7_topicfix.csv

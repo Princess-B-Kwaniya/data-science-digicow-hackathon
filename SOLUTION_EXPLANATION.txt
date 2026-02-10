@@ -1,169 +1,167 @@
 DIGICOW Hackathon - Solution Explanation
 =========================================
+Updated: February 10, 2026
 
 COMPETITION OVERVIEW
 --------------------
-This is a Zindi data science competition for predicting dairy technology adoption 
-by farmers in Kenya. The DigiCow platform trains farmers and we predict whether 
-they adopt the technology within 7, 90, and 120 days of their first training.
+Zindi DigiCow competition — predicting dairy technology adoption by farmers in
+Kenya. DigiCow trains farmers and we predict whether they adopt the technology
+within 7, 90, and 120 days of training.
 
-The evaluation metric is a composite score across 3 targets, each scored as:
-  Score = 0.75 * LogLoss + 0.25 * (1 - AUC)
-Final score = average of the 3 target scores (LOWER is better).
+Evaluation metric (per target):
+  Score = 0.75 * (1 - LogLoss) + 0.25 * AUC
+  Final score = sum across 3 targets. HIGHER = BETTER.
+  Maximum possible score = 3.0
 
 Each submission has 6 prediction columns:
   - Target_07_AUC, Target_07_LogLoss
-  - Target_90_AUC, Target_90_LogLoss
+  - Target_90_AUC, Target_90_LogLoss  
   - Target_120_AUC, Target_120_LogLoss
 
+⚠️  The dataset was completely refreshed mid-competition. All Phase 1 (old data)
+scores are invalidated. This document covers Phase 2 (new data).
 
-DATA
-----
-- Train.csv: ~14,000 farmer training records with 3 binary targets
-- Test.csv:  ~5,000 farmer records to predict
-- Key features: county, ward, subcounty, trainer, farmer_id, group_name, 
-  has_topic_trained_on, belong_to_cooperative, training_date
+DATA (Phase 2 — New Dataset)
+-----------------------------
+- Train.csv:  13,536 farmer training records with 3 binary targets
+- Test.csv:   5,621 farmer records to predict
+- Prior.csv:  44,882 rows — HISTORICAL farmer training sessions (KEY RESOURCE)
+- Target rates: 7d=1.13%, 90d=1.58%, 120d=2.23% (extreme imbalance)
 
-The data is tabular with mostly categorical features. There are geographic 
-hierarchies (county > subcounty > ward) and organizational groups.
+Schema changes from old data:
+  - farmer_name (was farmer_id)
+  - training_day (was training_date)
+  - topics_list: nested list-of-lists in Train/Test, flat list in Prior
+  - trainer: list format in Train/Test, plain string in Prior
 
-
-APPROACH THAT ACHIEVED HIGHEST SCORE
---------------------------------------
-Best Leaderboard Score: 0.7247 (submission: sub_V9_A_v7_topicfix.csv)
-
-The solution is built in three stages:
-
-### Stage 1: GROUPS_V3_FAST.py -> sub_V3_A_optimal.csv (LB: 0.722)
-
-This uses Bayesian hierarchical group-based predictions (NO machine learning model).
-
-Core idea: For each target, predictions are made using group-level adoption rates 
-with Bayesian smoothing toward the global mean.
-
-  Bayesian prediction = (group_count * group_mean + s * global_mean) / (group_count + s)
-
-Where s is the smoothing parameter (higher s = more conservative, closer to global mean).
-
-The hierarchy works by cascading through group keys from most specific to most general:
-  1. trainer_ward_topic (most specific: which trainer, which ward, which topic)
-  2. trainer_ward
-  3. ward_topic
-  4. county_topic
-  5. trainer
-  6. county
-  7. ward (most general)
-
-For each test row:
-  - Try the most specific group first
-  - If the group exists in training data, use its Bayesian-smoothed prediction
-  - If not, fall through to the next less-specific group
-  - Final fallback is the global adoption rate
-
-The optimal smoothing parameter and hierarchy ordering were selected via 
-5-fold stratified cross-validation, independently for each target.
-
-Key insight: This approach works because the data has strong geographic and 
-trainer-based patterns. Farmers in the same ward trained by the same trainer 
-on the same topic have very similar adoption patterns.
+Key data properties:
+  - ZERO farmer overlap between Train and Test
+  - 62.7% of test farmers appear in Prior.csv (3,526 of 5,621)
+  - Average 8.1 prior sessions per test farmer with history
+  - Zero trainer overlap between Prior and Train/Test
+  - Group overlap: Prior∩Test=210/239, Train∩Test=126 groups
 
 
-### Stage 2: V7_SAFE.py -> sub_V7_D1_DUAL_fine_v3ll.csv (LB: 0.723)
+BEST APPROACH — CompetitiveSolution.py (LB: 0.91788)
+------------------------------------------------------
+Best Leaderboard Score: 0.91788 (submission: sub_COMP_D_dual_prior_blend.csv)
 
-This builds on V3 with a DUAL column strategy:
+### Core Pipeline
 
-Since Zindi evaluates AUC and LogLoss from SEPARATE columns, we can optimize 
-each independently:
+1. PRIOR AS FEATURE SOURCE (not training data!)
+   Prior.csv provides 46 farmer/group/geo history features + 12 prior target
+   encodings. These capture each farmer's historical adoption behavior.
+   
+   Farmer history (19 features): session counts, adoption rates per target,
+   cooperative rate, unique groups/wards/trainers, topic diversity, training
+   span, ever-adopted flags, adoption score.
+   
+   Group history (9 features): group size, adoption rates, cooperative/topic
+   rates, unique farmers/trainers, adoption score.
+   
+   Geo history (18 features): ward/subcounty/county-level adoption rates,
+   sizes, cooperative rates, has_topic rates.
 
-  - LogLoss columns: Keep the V3_A_optimal predictions (well-calibrated, proven 0.722)
-  - AUC columns: Use a FINER-grained hierarchy that produces more unique values
+2. LIGHTGBM ON TRAIN ONLY (13,536 rows)
+   Single LightGBM model with 205 features, 5-fold StratifiedKFold CV.
+   Params: num_leaves=63, lr=0.03, feature_fraction=0.75, bagging=0.8,
+   scale_pos_weight per target (~44-88x for class imbalance).
+   
+   CV scores: 7d AUC=0.975/LL=0.033, 90d AUC=0.977/LL=0.035,
+   120d AUC=0.981/LL=0.039. Estimated total: 2.903.
 
-The fine-grained hierarchy for AUC includes ward_group and group_name:
-  ward_group -> group_name -> ward_topic -> county_topic -> ward -> county -> trainer
+3. DUAL COLUMN STRATEGY
+   AUC columns: rank-based (percentile * 0.998 + 0.001) — optimized for ranking
+   LL columns: raw calibrated model predictions — optimized for calibration
 
-More unique prediction values help AUC because AUC measures ranking ability.
-V3 only had ~39 unique values; the fine hierarchy creates hundreds, giving 
-the AUC metric more granularity to distinguish between farmers.
+4. PRIOR RATE BLENDING (70% model, 30% prior)
+   For test farmers with prior history, blend model predictions with their
+   known historical adoption rate. Anchors predictions to observed behavior.
 
-The LogLoss columns stay identical to V3 because LogLoss penalizes 
-miscalibrated probabilities heavily - any aggressive changes hurt it 
-(lesson learned from earlier farmer_id experiments that dropped to 0.702).
+5. POST-PROCESSING
+   - has_topic_trained_on=0 → force 0.001 (24 test rows)
+   - Groups with 30+ train samples and 0% adoption → cap at 0.005
+   - Monotonicity enforcement: pred_7d ≤ pred_90d ≤ pred_120d
+   - Clip all predictions to [0.001, 0.999]
 
-
-### Stage 3: V9_TOPICFIX.py -> sub_V9_A_v7_topicfix.csv (LB: 0.7247)
-
-This is a targeted post-processing fix on top of V7:
-
-Key discovery: The feature has_topic_trained_on is a binary (0/1) flag.
-In training data, ALL 838 rows with has_topic_trained_on=0 have ZERO adoption
-across all 3 targets. This means farmers who were not trained on a specific topic
-never adopt the technology.
-
-In the test set, 99 rows have has_topic_trained_on=0. V7 was predicting these
-at 3-10% probability (from geographic group averages), but the true probability
-is essentially 0%.
-
-The fix: Force all predictions for has_topic_trained_on=0 test rows to 0.001
-(minimum allowed value) in BOTH AUC and LogLoss columns.
-
-Why this helps:
-  - LogLoss: Predicting 0.001 instead of 0.03-0.10 for actual 0 labels gives
-    much lower log loss. The penalty goes from -log(1-0.05)≈0.051 to -log(0.999)≈0.001.
-  - AUC: Pushing guaranteed non-adopters to the minimum helps the ranking — they
-    should be ranked below all other farmers.
-
-This changed only 99 of 6000 test rows. No model retraining needed.
-
-
-LEADERBOARD PROGRESSION
------------------------
-  V3_A_optimal (Stage 1):       0.722
-  V7_D1 DUAL (Stage 2):         0.723  
-  V9_A topic fix (Stage 3):     0.7247  (current best)
+### Feature Breakdown (205 total)
+  - Prior farmer history:     19 features
+  - Prior group history:       9 features
+  - Prior geo history:        18 features
+  - Temporal:                 16 features (year, month, day, cyclic, season, etc.)
+  - Topic categories:         15 features (topic_count, 11 binary categories, etc.)
+  - Geographic interactions:   8 features (county_subcounty, ward_trainer, etc.)
+  - Frequency encoding:       11 features
+  - Group features:            9 features (size, coop rate, diversity, etc.)
+  - Trainer features:          5 features
+  - Demographics:              9 interaction features
+  - History interactions:      7 features
+  - Target encoding OOF:      45 features (15 cols × 3 targets, smoothing=10)
+  - Prior target encoding:    12 features (4 cols × 3 targets, smoothing=20)
+  - Aggregations:              9 features
+  - Other:                    13 features
 
 
-KEY LESSONS LEARNED
---------------------
-1. Group-based Bayesian predictions beat ML models (LightGBM, CatBoost) on this 
-   data because the categorical features have strong hierarchical structure.
+LEADERBOARD PROGRESSION (Phase 2)
+-----------------------------------
+  COMP_A  (standard):                0.91748
+  COMP_B  (DUAL):                    ~0.9175
+  COMP_D  (DUAL + Prior blend):      0.91788  ★ CURRENT BEST
+  ENS_G   (3-model, Prior+Train):    0.90705  ✗ Prior training HURT
+  REFv3_A (3-model, extra features): 0.88230  ✗ Target leakage from train_grp_rate
+  REFv3_D (60% D + 40% REFv3_A):    0.91254  ✗ Bad blend poisoned D
 
-2. Bayesian smoothing is critical - raw group means overfit badly, especially 
-   for small groups. The smoothing parameter s controls the bias-variance tradeoff.
 
-3. The DUAL column strategy (different predictions for AUC vs LogLoss) provides 
-   a small but real improvement because the two metrics reward different properties.
+KEY LESSONS LEARNED (Phase 2)
+-------------------------------
+1. Prior.csv as FEATURES is the biggest signal source. 62.7% test coverage
+   with farmer-level history enables powerful predictions.
 
-4. Aggressive personalization (e.g., farmer_id with low smoothing) destroys 
-   LogLoss even when it helps AUC - LogLoss has 3x the weight.
+2. NEVER train on Prior.csv data. Prior has higher adoption rates (1.5-4.7%
+   vs Train's 1.1-2.2%). Mixing shifts predictions upward, destroying
+   LogLoss calibration. ENS_G confirmed: 0.907 vs D's 0.918.
 
-5. Cross-validation on this dataset is unreliable for small improvements 
-   (<0.005) due to distribution shift between train and test.
+3. Adding features can HURT badly. REFINED_v3 added train_grp_*_rate
+   (target leakage!) and other features. CV improved (2.945 vs 2.903)
+   but LB dropped to 0.882. NEVER trust CV improvements from leaked features.
 
-6. Fine-grained hierarchies (ward_group, group_name) overfit in CV but hurt 
-   test LogLoss badly — V8 changed the LL column and dropped to 0.695.
+4. The DUAL column strategy provides consistent small gains (~0.0004).
+   Rank-based AUC + calibrated LL is strictly better than same-column.
 
-7. Domain knowledge beats brute-force optimization: the has_topic_trained_on=0 
-   insight (guaranteed non-adoption) provided a safe, reliable improvement.
+5. Prior rate blending (70/30) helps for farmers with known history.
+   Anchoring to observed behavior reduces prediction error.
+
+6. Don't blend with worse predictions. Even 60% proven D + 40% bad
+   ensemble dropped D from 0.918 to 0.913.
+
+7. The competition rewards low, well-calibrated predictions more than
+   high discriminative power. With ~1-2% adoption rates, pushing most
+   predictions low is correct behavior.
 
 
 FILES IN THIS REPOSITORY
 --------------------------
-Solution code:
-  - GROUPS_V3_FAST.py    : Stage 1 - generates the V3 base predictions (LB 0.722)
-  - V7_SAFE.py           : Stage 2 - DUAL column improvement (LB 0.723)
-  - V9_TOPICFIX.py       : Stage 3 - topic=0 post-processing fix (LB 0.7247, best)
+Phase 2 solution code:
+  - CompetitiveSolution.py   : BEST pipeline — produced LB 0.91788
+  - ENHANCED_V2.py           : Prior+Train mega-training — FAILED (0.907)
+  - REFINED_v3.py            : 3-model ensemble + new features — FAILED (0.882)
+  - cross_analysis.py        : Diagnostic analysis of Prior/Train/Test
+  - check_new_data.py        : Schema profiling for new dataset
+
+Phase 1 code (old data, invalidated):
+  - GROUPS_V3.py, GROUPS_V3_FAST.py, GROUPS_V4.py : Bayesian hierarchies
+  - DUAL_FINAL.py            : DUAL strategy + zero-group rules (old best 0.728)
+  - SIMPLE_SOLUTION.py, DEEP_LGBM.py, DIVERSITY_BLEND.py
 
 Best submissions:
-  - sub_V3_A_optimal.csv         : V3 base submission (LB 0.722)
-  - sub_V7_D1_DUAL_fine_v3ll.csv : V7 DUAL submission (LB 0.723)
-  - sub_V9_A_v7_topicfix.csv     : Best submission (LB 0.7247)
+  - sub_COMP_D_dual_prior_blend.csv : LB 0.91788 (CURRENT BEST)
+  - sub_COMP_A_lgbm_standard.csv    : LB 0.91748
+  - sub_REFv3_*.csv                 : Various failed attempts
 
 Data:
-  - Train.csv                    : Training data (16,000 rows)
-  - Test.csv                     : Test data (6,000 rows)
-  - dataset_data_dictionary.csv  : Column descriptions
-  - SampleSubmission.csv         : Submission format template
+  - Train.csv (13,536 rows), Test.csv (5,621 rows), Prior.csv (44,882 rows)
+  - SampleSubmission.csv, dataset_data_dictionary.csv
 
-Notebooks:
-  - StarterNotebook.ipynb        : Competition starter notebook
-  - CompetitiveSolution.ipynb    : Competition-provided competitive solution
+Documentation:
+  - SOLUTION_EVOLUTION.txt   : Full score progression and strategy details
+  - SOLUTION_EXPLANATION.txt : This file

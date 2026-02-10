@@ -7,8 +7,8 @@ belong_to_cooperative,"Whether the farmer belongs to a cooperative (1 = yes, 0 =
 county,County of residence
 subcounty,Sub-county of residence
 ward,Ward of residence
-trainer,Trainer who delivered the first training
-topics,List of possible training topics
+trainer,List of Trainers who delivered the training on a given day
+topics,List of List of possible training topics
 has_topic_traine_on, A boolean value indicating whether there is that the farmer was trained on.
 first_training_date,Date of the farmer’s first training
 adopted_within_07_days,"Target: adoption within 07 days of first training (1 = yes, 0 = no)"
