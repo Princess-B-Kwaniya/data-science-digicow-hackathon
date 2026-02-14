@@ -3,53 +3,54 @@
 
 # Allow these specific files
 !.gitignore
-!SOLUTION_EXPLANATION.txt
-!SOLUTION_EVOLUTION.txt
 !README.md
+!SOLUTION_EXPLANATION.txt
 
-# ===== PHASE 2 (New Data) =====
-
-# Best solution code
+# ===== Core Scripts =====
 !CompetitiveSolution.py
-!ENHANCED_V2.py
-!REFINED_v3.py
+!ULTIMATE_V4.py
+!ULTIMATE_V5.py
+!gen_best.py
+!gen_best2.py
+
+# Analysis
 !cross_analysis.py
-!check_new_data.py
+!DEEP_EDA_ANALYSIS.py
 
-# Best submissions (Phase 2)
-!sub_COMP_A_lgbm_standard.csv
-!sub_COMP_B_lgbm_dual.csv
-!sub_COMP_C_blend_prior.csv
-!sub_COMP_D_dual_prior_blend.csv
-!sub_REFv3_A_ens_blend_dual.csv
-!sub_REFv3_B_ens_dual.csv
-!sub_REFv3_C_platt_blend_dual.csv
-!sub_REFv3_D_blend60D_40new.csv
-!sub_REFv3_E_blend50D_50new.csv
-
-# New data files
-!Prior.csv
-
-# ===== PHASE 1 (Old Data — invalidated) =====
-
-# Solution code (produced highest score on old data)
-!GROUPS_V3_FAST.py
-!V7_SAFE.py
-!V9_TOPICFIX.py
-!DUAL_FINAL.py
-
-# Best submissions (old data)
-!sub_V3_A_optimal.csv
-!sub_V7_D1_DUAL_fine_v3ll.csv
-!sub_V9_A_v7_topicfix.csv
-!sub_DUAL_f1_g3_w3.csv
-
-# Data files
+# ===== Data =====
 !Train.csv
 !Test.csv
+!Prior.csv
 !dataset_data_dictionary.csv
 !SampleSubmission.csv
 
-# Notebooks
+# ===== Notebooks =====
 !StarterNotebook.ipynb
 !CompetitiveSolution.ipynb
+
+# ===== Best Submission =====
+!sub_BEST2_rklo80d60_auc15.csv
+
+# Source files for blending
+!sub_ADV_pertarget_progressive.csv
+!submission_v4_ensemble (3).csv
+
+# ===== Untested Submissions (next day) =====
+!sub_BEST2_rklo80d60_auc20.csv
+!sub_BEST2_rklo80d60_auc25.csv
+!sub_BEST2_rklo80d60_auc30.csv
+!sub_BEST2_rklo80d60_auc35.csv
+!sub_BEST2_rklo80d60_auc40.csv
+!sub_BEST2_rklo80d60_auc45.csv
+!sub_BEST2_rklo80d60_auc50.csv
+!sub_BEST2_rkloFULL_auc10.csv
+!sub_BEST2_rkloFULL_auc15.csv
+!sub_BEST2_rkloFULL_auc20.csv
+!sub_BEST2_rkloFULL_auc25.csv
+!sub_BEST2_rkloFULL_auc30.csv
+!sub_BEST2_aucPT_A_15_10_5.csv
+!sub_BEST2_aucPT_B_5_10_15.csv
+!sub_BEST2_aucPT_C_10_15_20.csv
+!sub_BEST2_aucPT_D_20_15_10.csv
+!sub_BEST2_aucPT_E_15_15_15.csv
+!sub_BEST2_aucPT_F_20_20_20.csv
